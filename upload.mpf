@@ -2,4 +2,5 @@ open ttyUSB0
 put boot.py
 put config.py
 put main.py
+put switch.py
 ls

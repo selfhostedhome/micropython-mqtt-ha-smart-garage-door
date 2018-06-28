@@ -1,79 +1,84 @@
 from umqtt.simple import MQTTClient
+from switch import Switch
 import machine
 import ubinascii
+import time
 
 from config import SERVER, COMMAND_TOPIC, STATE_TOPIC, AVAILABILITY_TOPIC
 
 CLIENT = None
 CLIENT_ID = ubinascii.hexlify(machine.unique_id())
 
+relay_pin = None
 
-class ReedSwitch():
-    def __init__(self, pin):
-        self.pin = pin
-        self.pin.irq(handler=self.switch_change,
-                     trigger=machine.Pin.IRQ_FALLING | machine.Pin.IRQ_RISING)
 
-        self.debounce_timer = machine.Timer(-1)
-        self.new_value_available = False
-        self.value = None
-        self.prev_value = None
-        self.debounce_checks = 0
-
-    def switch_change(self, pin):
-        self.value = pin.value()
-
-        # Start timer to check for debounce
-        self.debounce_checks = 0
-        self.start_debounce_timer()
-
-        # Disable IRQs for GPIO pin while debouncing
-        self.pin.irq(trigger=0)
-
-    def start_debounce_timer(self):
-        self.debounce_timer.init(period=100, mode=machine.Timer.ONE_SHOT,
-                                 callback=self.check_debounce)
-
-    def check_debounce(self, _):
-        new_value = self.pin.value()
-
-        if new_value == self.value:
-            self.debounce_checks = self.debounce_checks + 1
-
-            if self.debounce_checks == 3:
-                # Values are the same, debouncing done
-
-                # Check if this is actually a new value for the application
-                if self.prev_value != self.value:
-                    self.new_value_available = True
-                    self.prev_value = self.value
-
-                # Re-enable the Switch IRQ to get the next change
-                self.pin.irq(handler=self.switch_change,
-                             trigger=machine.Pin.IRQ_FALLING | machine.Pin.IRQ_RISING)
-            else:
-                # Start the timer over to make sure debounce value stays the same
-                self.start_debounce_timer()
-        else:
-            # Values are not the same, update value we're checking for and
-            # delay again
-            self.debounce_checks = 0
-            self.value = new_value
-            self.start_debounce_timer()
+def new_msg(topic, msg):
+    print("Received {} on {} topic".format(msg, topic))
+    print("Turning relay on")
+    relay_pin.value(1)
+    time.sleep_ms(600)
+    print("Turning relay off")
+    relay_pin.value(0)
 
 
 def main():
+    global relay_pin
+
+    client = MQTTClient(CLIENT_ID, SERVER)
+    client.set_callback(new_msg)
+
+    try:
+        client.connect()
+    except OSError:
+        print("MQTT Broker seems down")
+        print("Resetting after 20 seconds")
+        time.sleep(20)
+        machine.reset()
+
+    client.subscribe(COMMAND_TOPIC)
+
+    # Publish as available once connected
+    client.publish(AVAILABILITY_TOPIC, "online", retain=True)
 
     switch_pin = machine.Pin(5, machine.Pin.IN, machine.Pin.PULL_UP)
-    reed_switch = ReedSwitch(switch_pin)
+    reed_switch = Switch(switch_pin)
 
-    while True:
-        irq_state = machine.disable_irq()
+    # Initialize state of garage door after booting up
+    if switch_pin.value():
+        client.publish(STATE_TOPIC, "open")
+    else:
+        client.publish(STATE_TOPIC, "closed")
 
-        if reed_switch.new_value_available:
-            print("New value is ", reed_switch.value)
-            reed_switch.new_value_available = False
+    relay_pin = machine.Pin(4, machine.Pin.OUT, 0)
 
-        machine.enable_irq(irq_state)
+    try:
+        while True:
+
+            reed_switch_new_value = False
+
+            # Disable interrupts for a short time to read shared variable
+            irq_state = machine.disable_irq()
+            if reed_switch.new_value_available:
+                reed_switch_value = reed_switch.value
+                reed_switch_new_value = True
+                reed_switch.new_value_available = False
+            machine.enable_irq(irq_state)
+
+            # If the reed switch had a new value, publish the new state
+            if reed_switch_new_value:
+                if reed_switch_value:
+                    client.publish(STATE_TOPIC, "open")
+                else:
+                    client.publish(STATE_TOPIC, "closed")
+
+            # Process any MQTT messages
+            if client.check_msg():
+                client.wait_msg()
+
+    finally:
+        client.publish(AVAILABILITY_TOPIC, "offline", retain=False)
+        client.disconnect()
+        machine.reset()
+
 
 main()

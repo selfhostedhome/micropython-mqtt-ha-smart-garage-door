@@ -6,8 +6,9 @@ import webrepl
 import network
 from config import ESSID, PASSWORD
 
-webrepl.start()
 gc.collect()
+
+print("Starting...")
 
 
 def connect():
