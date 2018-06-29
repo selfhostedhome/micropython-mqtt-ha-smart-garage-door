@@ -82,3 +82,6 @@ def main():
 
 
 main()
+
+# Should never leave main() function, but if program crashes reset
+machine.reset()
