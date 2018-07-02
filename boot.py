@@ -2,7 +2,6 @@
 #import esp
 #esp.osdebug(None)
 import gc
-import webrepl
 import network
 from config import ESSID, PASSWORD
 
