@@ -1,9 +1,16 @@
 import machine
 
-class Switch():
+
+class Switch(): # pylint: disable=too-few-public-methods
+    """Switch Class
+
+    Class for defining a switch. Uses internal state to debounce switch in
+    software. To use switch, check the "new_value_available" member and the
+    "value" member from the application.
+    """
     def __init__(self, pin):
         self.pin = pin
-        self.pin.irq(handler=self.switch_change,
+        self.pin.irq(handler=self._switch_change,
                      trigger=machine.Pin.IRQ_FALLING | machine.Pin.IRQ_RISING)
 
         self.debounce_timer = machine.Timer(-1)
@@ -12,21 +19,21 @@ class Switch():
         self.prev_value = None
         self.debounce_checks = 0
 
-    def switch_change(self, pin):
+    def _switch_change(self, pin):
         self.value = pin.value()
 
         # Start timer to check for debounce
         self.debounce_checks = 0
-        self.start_debounce_timer()
+        self._start_debounce_timer()
 
         # Disable IRQs for GPIO pin while debouncing
         self.pin.irq(trigger=0)
 
-    def start_debounce_timer(self):
+    def _start_debounce_timer(self):
         self.debounce_timer.init(period=100, mode=machine.Timer.ONE_SHOT,
-                                 callback=self.check_debounce)
+                                 callback=self._check_debounce)
 
-    def check_debounce(self, _):
+    def _check_debounce(self, _):
         new_value = self.pin.value()
 
         if new_value == self.value:
@@ -41,15 +48,14 @@ class Switch():
                     self.prev_value = self.value
 
                 # Re-enable the Switch IRQ to get the next change
-                self.pin.irq(handler=self.switch_change,
+                self.pin.irq(handler=self._switch_change,
                              trigger=machine.Pin.IRQ_FALLING | machine.Pin.IRQ_RISING)
             else:
                 # Start the timer over to make sure debounce value stays the same
-                self.start_debounce_timer()
+                self._start_debounce_timer()
         else:
             # Values are not the same, update value we're checking for and
             # delay again
             self.debounce_checks = 0
             self.value = new_value
-            self.start_debounce_timer()
-
+            self._start_debounce_timer()
