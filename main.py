@@ -45,9 +45,9 @@ def main():
 
     # Initialize state of garage door after booting up
     if switch_pin.value():
-        client.publish(STATE_TOPIC, "open")
+        client.publish(STATE_TOPIC, "open", retain=True)
     else:
-        client.publish(STATE_TOPIC, "closed")
+        client.publish(STATE_TOPIC, "closed", retain=True)
 
     relay_pin = machine.Pin(4, machine.Pin.OUT, 0)
 
