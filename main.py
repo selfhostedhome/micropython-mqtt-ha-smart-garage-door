@@ -6,7 +6,6 @@ import time
 
 from config import SERVER, COMMAND_TOPIC, STATE_TOPIC, AVAILABILITY_TOPIC
 
-CLIENT = None
 CLIENT_ID = ubinascii.hexlify(machine.unique_id())
 
 relay_pin = None
@@ -74,6 +73,8 @@ def main():
             # Process any MQTT messages
             if client.check_msg():
                 client.wait_msg()
+
+            time.sleep_ms(500)
 
     finally:
         client.publish(AVAILABILITY_TOPIC, "offline", retain=False)
