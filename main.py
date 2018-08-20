@@ -38,7 +38,6 @@ def main():
 
     # Publish as available once connected
     client.publish(AVAILABILITY_TOPIC, "online", retain=True)
-
     switch_pin = machine.Pin(5, machine.Pin.IN, machine.Pin.PULL_UP)
     reed_switch = Switch(switch_pin)
 
@@ -74,7 +73,7 @@ def main():
             if client.check_msg():
                 client.wait_msg()
 
-            time.sleep_ms(500)
+            time.sleep(1)
 
     finally:
         client.publish(AVAILABILITY_TOPIC, "offline", retain=False)
